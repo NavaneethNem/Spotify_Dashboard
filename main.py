@@ -55,7 +55,7 @@ def authentication():
       "code_challenge_method": 'S256',
       "code_challenge": code_challenge,
       "redirect_uri":redirect_uri,
-      "scope":"user-top-read",
+      "scope":"user-top-read user-read-recently-played",
       "state":state
     }
     server=HTTPServer(("127.0.0.1",8888),CallbackHandler)
@@ -64,6 +64,9 @@ def authentication():
     cstate=None
     webbrowser.open(authorization_url)
     server.handle_request()
+    if authorization_code==None:
+         print("Authorization failed!")
+         exit()
     if state!=cstate:
         print("State is not matching!")
         exit()
@@ -137,6 +140,17 @@ def topTracks(headers):
         else:
             print("Error getting profile: ",response.status_code)
             print(response.json())
+def recentlyPlayed(headers):
+     parameters={
+          "limit":10
+     }
+     response=requests.get("https://api.spotify.com/v1/me/player/recently-played",headers=headers,params=parameters)
+     data=response.json()
+     items=data["items"]
+     print("\nYour recently played tracks : ")
+     for item in items:
+          print(item["track"]["name"])
+
 print("Please authenticate yourself in Spotify to continue using this app!")
 print("Enter 1 to continue or anything else to exit...")
 try:
@@ -152,3 +166,4 @@ response=requests.get("https://api.spotify.com/v1/me",headers=headers)
 print("Welcome!",response.json()["display_name"])
 topArtists(headers)
 topTracks(headers)
+recentlyPlayed(headers)
