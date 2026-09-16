@@ -9,6 +9,7 @@ from urllib.parse import urlencode
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 import webbrowser
+import json
 def authentication():
     code_verifier=secrets.token_urlsafe(64)
     state=secrets.token_urlsafe(32)
@@ -47,8 +48,6 @@ def authentication():
     redirect_uri=os.environ.get("SPOTIFY_REDIRECT_URI")
     hashed=hashlib.sha256(code_verifier.encode()).digest()
     code_challenge=base64.urlsafe_b64encode(hashed).decode().rstrip("=")
-    # print(code_verifier)
-    # print(code_challenge)
     params =  {
       "response_type": 'code',
       "client_id": client_id,
@@ -90,6 +89,22 @@ def authentication():
         print("Error getting token, Response code : ",response_code)
         print(response.json())
         exit()
+
+def refreshAccessToken(refresh_token):
+     client_id=os.environ.get("SPOTIFY_CLIENT_ID")
+     token_url="https://accounts.spotify.com/api/token"
+     data={
+          "client_id":client_id,
+          "grant_type":"refresh_token",
+          "refresh_token":refresh_token
+     }
+     response=requests.post(token_url,data=data)
+     if response.status_code==200:
+         access_token=response.json()['access_token']
+         return access_token
+     else:
+          print("Error refreshing access token: ",response.status_code)
+          return None
 def getTimeRange():
     print("What time range should be conisdered?(Choose 1,2 or 3)")
     print("1.Short Term\n2.Medium Term\n3.Long Term")
@@ -104,6 +119,42 @@ def getTimeRange():
         print("Invalid Input. Enter a valid number!")
         term=getTimeRange()
     return term
+
+def saveRefreshToken(refresh_token):
+     data={
+          "refresh_token":refresh_token
+     }
+     with open("session.json","w") as f:
+          json.dump(data,f,indent=2)
+def loadRefreshToken():
+     try:
+          with open("session.json","r") as f:
+               data=json.load(f)
+          try:
+               token=data["refresh_token"]
+               return token
+          except KeyError:
+               return None
+     except FileNotFoundError:
+          return None
+def destroyRefreshToken():
+     data={}
+     with open("session.json","w") as f:
+          json.dump(data,f,indent=2)
+
+def loadingScreen():
+    print("Please authenticate yourself in Spotify to continue using this app!")
+    print("Enter 1 to continue or anything else to exit...")
+    try:
+        choice=int(input())
+        if choice!=1:
+            exit()
+    except ValueError:
+        exit()
+    access_token,refresh_token=authentication()  #Getting access and refresh token
+    saveRefreshToken(refresh_token)
+    return access_token,refresh_token
+
 def topArtists(headers):
     print("Enter number of top artists you would like to see : ")
     x=int(input())
@@ -122,6 +173,8 @@ def topArtists(headers):
     else:
         print("Error getting profile: ",response.status_code)
         print(response.json())
+
+
 def topTracks(headers):
         print("Enter number of your top tracks you'd like to see : ")
         x=int(input())
@@ -136,34 +189,63 @@ def topTracks(headers):
             tracks=user_data['items']
             print("Here are your top",x,"tracks: \n")
             for track in tracks:
-                print(track['name'])
+                print(track['name']," : ",track['artists'][0]['name'])
         else:
             print("Error getting profile: ",response.status_code)
             print(response.json())
-def recentlyPlayed(headers):
-     parameters={
-          "limit":10
-     }
-     response=requests.get("https://api.spotify.com/v1/me/player/recently-played",headers=headers,params=parameters)
-     data=response.json()
-     items=data["items"]
-     print("\nYour recently played tracks : ")
-     for item in items:
-          print(item["track"]["name"])
 
-print("Please authenticate yourself in Spotify to continue using this app!")
-print("Enter 1 to continue or anything else to exit...")
-try:
-    choice=int(input())
-    if choice!=1:
-        exit()
-except ValueError:
-    exit()
-access_token,refresh_token=authentication()
+
+def recentlyPlayed(headers):
+    parameters={
+          "limit":10
+    }
+    response=requests.get("https://api.spotify.com/v1/me/player/recently-played",headers=headers,params=parameters)
+    data=response.json()
+    status_code=response.status_code
+    if status_code==200:   
+        items=data["items"]
+        print("\nYour recently played tracks : ")
+        for item in items:
+            print(item["track"]["name"])
+    else:
+         print("Error getting recently played tracks. Status code:",status_code)
+         exit()
+
+refresh_token=loadRefreshToken()
+if refresh_token:
+    access_token=refreshAccessToken(refresh_token)
+    if not access_token:
+         access_token,refresh_token=loadingScreen()
+else:
+    access_token,refresh_token=loadingScreen()
 headers={"Authorization":f"Bearer {access_token}"}
 #Welcome note
 response=requests.get("https://api.spotify.com/v1/me",headers=headers)
 print("Welcome!",response.json()["display_name"])
-topArtists(headers)
-topTracks(headers)
-recentlyPlayed(headers)
+while True:
+    print("Choose what you would like to see :) ")
+    print("1. Find your top artists :")
+    print("2. Find your top tracks :")
+    print("3. Get your recently played tracks : ")
+    print("4. To logout of the app and exit")
+    print("5. To exit the app")
+    try:
+         k=int(input())
+    except ValueError:
+         print("Input should be a number!")
+         continue
+    if k==1:
+        topArtists(headers)
+    elif k==2:
+        topTracks(headers)
+    elif k==3:
+        recentlyPlayed(headers)
+    elif k==4: #Will add once we set up refresh token and session persistance
+         destroyRefreshToken()
+         print("Good Bye! :)")
+         exit()
+    elif k==5:
+         print("Good Bye! :) ")
+         exit()
+    else:
+        print("Invalid Input!")
