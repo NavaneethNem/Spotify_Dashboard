@@ -57,11 +57,12 @@ def authentication():
       "scope":"user-top-read user-read-recently-played",
       "state":state
     }
-    server=HTTPServer(("127.0.0.1",8888),CallbackHandler)
+    server=HTTPServer(("0.0.0.0",8888),CallbackHandler)
     authorization_url=("https://accounts.spotify.com/authorize?"+urlencode(params))
     authorization_code = None
     cstate=None
-    webbrowser.open(authorization_url)
+    print("Go to the url below to autherize : ")
+    print(authorization_url)
     server.handle_request()
     if authorization_code==None:
          print("Authorization failed!")

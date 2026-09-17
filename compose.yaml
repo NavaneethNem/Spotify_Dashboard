@@ -1,0 +1,10 @@
+services:
+  spotify-dashboard:
+    build: .
+    stdin_open: true
+    tty: true
+    volumes:
+      - ./.env:/app/.env
+      - ./session.json:/app/session.json
+    ports:
+      - "8888:8888"
